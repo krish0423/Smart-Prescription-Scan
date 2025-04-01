@@ -4,6 +4,8 @@ import 'package:flutter/cupertino.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:provider/provider.dart';
+import '../providers/theme_provider.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({Key? key}) : super(key: key);
@@ -26,7 +28,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _loadSettings() async {
     final prefs = await SharedPreferences.getInstance();
-
     setState(() {
       _theme = prefs.getString('theme') ?? 'system';
       _saveImages = prefs.getBool('save_images') ?? true;
@@ -36,11 +37,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveTheme(String theme) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('theme', theme);
-    setState(() {
-      _theme = theme;
-    });
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('theme', theme);
+
+      if (!mounted) return;
+
+      setState(() {
+        _theme = theme;
+      });
+
+      final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+      switch (theme) {
+        case 'light':
+          themeProvider.setThemeMode(ThemeMode.light);
+          break;
+        case 'dark':
+          themeProvider.setThemeMode(ThemeMode.dark);
+          break;
+        default:
+          themeProvider.setThemeMode(ThemeMode.system);
+      }
+    } catch (e) {
+      _showMessage('Failed to save theme preference', isError: true);
+    }
   }
 
   Future<void> _toggleSaveImages(bool value) async {
@@ -60,18 +80,27 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _saveApiKey(String apiKey) async {
-    // In a real app, you would store this securely
-    // For demo purposes, we're just updating the .env value in memory
-    dotenv.env['GEMINI_API_KEY'] = apiKey;
+    if (apiKey.trim().isEmpty) {
+      _showMessage('API Key cannot be empty', isError: true);
+      return;
+    }
 
-    // Show success message
+    try {
+      dotenv.env['GEMINI_API_KEY'] = apiKey;
+      _showMessage('API Key saved successfully');
+    } catch (e) {
+      _showMessage('Failed to save API Key', isError: true);
+    }
+  }
+
+  void _showMessage(String message, {bool isError = false}) {
     if (Platform.isIOS) {
       showCupertinoDialog(
         context: context,
         builder:
             (context) => CupertinoAlertDialog(
-              title: const Text('API Key Updated'),
-              content: const Text('Your Gemini API key has been updated.'),
+              title: Text(isError ? 'Error' : 'Success'),
+              content: Text(message),
               actions: [
                 CupertinoDialogAction(
                   child: const Text('OK'),
@@ -82,86 +111,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('API Key saved'),
-          backgroundColor: Colors.green,
+        SnackBar(
+          content: Text(message),
+          backgroundColor: isError ? Colors.red : Colors.green,
         ),
-      );
-    }
-  }
-
-  void _showAboutDialog() {
-    if (Platform.isIOS) {
-      showCupertinoDialog(
-        context: context,
-        builder:
-            (context) => CupertinoAlertDialog(
-              title: const Text('About Smart Prescription Scanner'),
-              content: const Column(
-                children: [
-                  SizedBox(height: 16),
-                  Text('Version 1.0.0'),
-                  SizedBox(height: 8),
-                  Text(
-                    'This app helps you scan and analyze your prescriptions using AI.',
-                  ),
-                  SizedBox(height: 16),
-                  Text('© 2023 Your Company'),
-                ],
-              ),
-              actions: [
-                CupertinoDialogAction(
-                  child: const Text('OK'),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-      );
-    } else {
-      showAboutDialog(
-        context: context,
-        applicationName: 'Smart Prescription Scanner',
-        applicationVersion: '1.0.0',
-        applicationLegalese: '© 2023 Your Company',
-        children: [
-          const SizedBox(height: 16),
-          const Text(
-            'This app helps you scan and analyze your prescriptions using AI.',
-          ),
-        ],
       );
     }
   }
 
   Future<void> _launchPrivacyPolicy() async {
     final Uri uri = Uri.parse('https://yourcompany.com/privacy-policy');
-
-    try {
-      if (!await launchUrl(uri)) {
-        throw Exception('Could not launch $uri');
-      }
-    } catch (e) {
-      if (Platform.isIOS) {
-        showCupertinoDialog(
-          context: context,
-
-          builder:
-              (context) => CupertinoAlertDialog(
-                title: const Text('Error'),
-                content: const Text('Could not open privacy policy'),
-                actions: [
-                  CupertinoDialogAction(
-                    child: const Text('OK'),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not open privacy policy')),
-        );
-      }
+    if (!await launchUrl(uri)) {
+      _showMessage('Could not open privacy policy', isError: true);
     }
   }
 
@@ -177,8 +138,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           children: [
             const SizedBox(height: 16),
-
-            // Appearance section
             _buildIOSSectionHeader('Appearance'),
             CupertinoFormSection(
               children: [
@@ -196,10 +155,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // Notifications section
             _buildIOSSectionHeader('Notifications'),
             CupertinoFormSection(
               children: [
@@ -212,10 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // Storage section
             _buildIOSSectionHeader('Storage'),
             CupertinoFormSection(
               children: [
@@ -228,10 +181,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // API Key section
             _buildIOSSectionHeader('API Settings'),
             CupertinoFormSection(
               children: [
@@ -242,7 +192,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   obscureText: true,
                 ),
                 CupertinoFormRow(
-                  prefix: const Text(''),
                   child: CupertinoButton(
                     child: const Text('Save API Key'),
                     onPressed: () => _saveApiKey(_apiKeyController.text),
@@ -250,42 +199,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 16),
-
-            // About section
             _buildIOSSectionHeader('About'),
             CupertinoFormSection(
               children: [
                 CupertinoFormRow(
-                  prefix: const Text('App Version'),
-                  child: const Text('1.0.0'),
-                ),
-                CupertinoFormRow(
-                  prefix: const Text('About'),
-                  child: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('View Information'),
-                        Icon(CupertinoIcons.forward, size: 18),
-                      ],
-                    ),
-                    onPressed: _showAboutDialog,
-                  ),
-                ),
-                CupertinoFormRow(
                   prefix: const Text('Privacy Policy'),
                   child: CupertinoButton(
                     padding: EdgeInsets.zero,
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text('View Policy'),
-                        Icon(CupertinoIcons.forward, size: 18),
-                      ],
-                    ),
+                    child: const Text('View Policy'),
                     onPressed: _launchPrivacyPolicy,
                   ),
                 ),
@@ -316,32 +238,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // Appearance section
           _buildSectionHeader('Appearance'),
           Card(
-            child: Column(
-              children: [
-                ListTile(
-                  title: const Text('Theme'),
-                  trailing: DropdownButton<String>(
-                    value: _theme,
-                    onChanged: (value) {
-                      if (value != null) _saveTheme(value);
-                    },
-                    items: const [
-                      DropdownMenuItem(value: 'system', child: Text('System')),
-                      DropdownMenuItem(value: 'light', child: Text('Light')),
-                      DropdownMenuItem(value: 'dark', child: Text('Dark')),
-                    ],
-                  ),
-                ),
-              ],
+            child: ListTile(
+              title: const Text('Theme'),
+              trailing: DropdownButton<String>(
+                value: _theme,
+                onChanged: (value) {
+                  if (value != null) _saveTheme(value);
+                },
+                items: const [
+                  DropdownMenuItem(value: 'system', child: Text('System')),
+                  DropdownMenuItem(value: 'light', child: Text('Light')),
+                  DropdownMenuItem(value: 'dark', child: Text('Dark')),
+                ],
+              ),
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // Notifications section
           _buildSectionHeader('Notifications'),
           Card(
             child: SwitchListTile(
@@ -350,29 +264,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onChanged: _toggleNotifications,
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // Storage section
           _buildSectionHeader('Storage'),
           Card(
             child: SwitchListTile(
               title: const Text('Save Prescription Images'),
-              subtitle: const Text('Keep copies of scanned prescriptions'),
               value: _saveImages,
               onChanged: _toggleSaveImages,
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // API Key section
           _buildSectionHeader('API Settings'),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: _apiKeyController,
@@ -391,31 +297,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // About section
           _buildSectionHeader('About'),
           Card(
-            child: Column(
-              children: [
-                ListTile(
-                  title: const Text('App Version'),
-                  trailing: const Text('1.0.0'),
-                ),
-                const Divider(),
-                ListTile(
-                  title: const Text('About'),
-                  trailing: const Icon(Icons.arrow_forward_ios),
-                  onTap: _showAboutDialog,
-                ),
-                const Divider(),
-                ListTile(
-                  title: const Text('Privacy Policy'),
-                  trailing: const Icon(Icons.arrow_forward_ios),
-                  onTap: _launchPrivacyPolicy,
-                ),
-              ],
+            child: ListTile(
+              title: const Text('Privacy Policy'),
+              trailing: const Icon(Icons.arrow_forward_ios),
+              onTap: _launchPrivacyPolicy,
             ),
           ),
         ],

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:path_provider/path_provider.dart';
 import '../models/prescription.dart';
 
@@ -74,26 +75,52 @@ class ResultScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    return Platform.isIOS
+        ? _buildIOSLayout(context)
+        : _buildAndroidLayout(context);
+  }
+
+  Widget _buildIOSLayout(BuildContext context) {
+    return CupertinoPageScaffold(
+      navigationBar: CupertinoNavigationBar(middle: const Text('Results')),
+      child: SafeArea(
+        child: Material(
+          // Add Material widget here
+          color: CupertinoColors.systemBackground,
+          child: _buildContent(context),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAndroidLayout(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Results'),
+        // Add your app bar items here
+      ),
+      body: _buildContent(context),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     // Check if there was an error
     if (prescriptionData.containsKey('error')) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Analysis Failed')),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Error: ${prescriptionData['error']}',
-                style: const TextStyle(color: Colors.red, fontSize: 16),
-              ),
-              const SizedBox(height: 20),
-              if (prescriptionData.containsKey('rawResponse'))
-                Text('Raw Response: ${prescriptionData['rawResponse']}'),
-              const SizedBox(height: 20),
-              Image.file(imageFile),
-            ],
-          ),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Error: ${prescriptionData['error']}',
+              style: const TextStyle(color: Colors.red, fontSize: 16),
+            ),
+            const SizedBox(height: 20),
+            if (prescriptionData.containsKey('rawResponse'))
+              Text('Raw Response: ${prescriptionData['rawResponse']}'),
+            const SizedBox(height: 20),
+            Image.file(imageFile),
+          ],
         ),
       );
     }
@@ -103,119 +130,132 @@ class ResultScreen extends StatelessWidget {
     try {
       prescription = Prescription.fromJson(prescriptionData);
     } catch (e) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Parsing Error')),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Error parsing data: $e',
-                style: const TextStyle(color: Colors.red, fontSize: 16),
-              ),
-              const SizedBox(height: 20),
-              Text('Raw data: $prescriptionData'),
-              const SizedBox(height: 20),
-              Image.file(imageFile),
-            ],
-          ),
-        ),
-      );
-    }
-
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Prescription Details'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.share),
-
-            onPressed: () => _sharePrescription(context, prescription),
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
+      return SingleChildScrollView(
         padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Doctor: ${prescription.doctorName}',
+            Text(
+              'Error parsing data: $e',
+              style: const TextStyle(color: Colors.red, fontSize: 16),
+            ),
+            const SizedBox(height: 20),
+            Text('Raw data: $prescriptionData'),
+            const SizedBox(height: 20),
+            Image.file(imageFile),
+          ],
+        ),
+      );
+    }
 
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Doctor: ${prescription.doctorName}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(height: 8),
-                    Text('Patient: ${prescription.patientName}'),
-                    Text('Date: ${prescription.date}'),
-                    if (prescription.diagnosis != null)
-                      Text('Diagnosis: ${prescription.diagnosis}'),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Patient: ${prescription.patientName}'),
+                  Text('Date: ${prescription.date}'),
+                  if (prescription.diagnosis != null)
+                    Text('Diagnosis: ${prescription.diagnosis}'),
+                ],
               ),
             ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'Medications',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          if (prescription.medications.isEmpty)
+            const Text('No medications found')
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: prescription.medications.length,
+              itemBuilder: (context, index) {
+                final med = prescription.medications[index];
+                return Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: ListTile(
+                    title: Text(med.name),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Dosage: ${med.dosage}'),
+                        Text('Frequency: ${med.frequency}'),
+                        if (med.duration != null)
+                          Text('Duration: ${med.duration}'),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          if (prescription.specialInstructions != null) ...[
             const SizedBox(height: 16),
             const Text(
-              'Medications',
+              'Special Instructions',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            if (prescription.medications.isEmpty)
-              const Text('No medications found')
-            else
-              ListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: prescription.medications.length,
-                itemBuilder: (context, index) {
-                  final med = prescription.medications[index];
-                  return Card(
-                    margin: const EdgeInsets.only(bottom: 8),
-                    child: ListTile(
-                      title: Text(med.name),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Dosage: ${med.dosage}'),
-                          Text('Frequency: ${med.frequency}'),
-                          if (med.duration != null)
-                            Text('Duration: ${med.duration}'),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(prescription.specialInstructions!),
               ),
-            if (prescription.specialInstructions != null) ...[
-              const SizedBox(height: 16),
-              const Text(
-                'Special Instructions',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(prescription.specialInstructions!),
-                ),
-              ),
-            ],
-            const SizedBox(height: 16),
-            ExpansionTile(
-              title: const Text('Original Prescription Image'),
-              children: [Image.file(imageFile)],
             ),
           ],
-        ),
+          const SizedBox(height: 16),
+          Platform.isIOS
+              ? CupertinoButton(
+                padding: EdgeInsets.zero,
+                onPressed: () {
+                  // Add image expansion logic here
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16.0),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: CupertinoColors.systemGrey),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Original Prescription Image',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Image.file(imageFile),
+                    ],
+                  ),
+                ),
+              )
+              : ExpansionTile(
+                title: const Text('Original Prescription Image'),
+                children: [Image.file(imageFile)],
+              ),
+        ],
       ),
     );
   }

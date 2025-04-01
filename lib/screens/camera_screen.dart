@@ -60,7 +60,7 @@ class _CameraScreenState extends State<CameraScreen> {
       final prescriptionData = await _geminiService.analyzePrescription(
         _imageFile!,
       );
-
+      debugPrint('Prescription Data: $prescriptionData');
       if (!mounted) return;
 
       if (prescriptionData.containsKey('error')) {
