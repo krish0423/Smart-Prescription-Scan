@@ -1,113 +1,174 @@
-import 'dart:io'
-    if (dart.library.html) 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:provider/provider.dart';
-import 'package:flutter/material.dart';
-import 'providers/theme_provider.dart';
-import 'screens/camera_screen.dart';
-import 'screens/history_screen.dart';
+import 'dart:io' show Platform;
+import 'screens/home_screen.dart';
+import 'screens/scan_prescription_screen.dart';
+import 'screens/scan_results_screen.dart';
+import 'screens/prescription_detail_screen.dart';
 import 'screens/settings_screen.dart';
-import 'screens/reminders_screen.dart';
-import 'utils/ios_theme.dart';
+import 'theme/app_theme.dart';
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load();
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child: const MyApp(),
-    ),
-  );
+void main() {
+  runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class MyApp extends StatefulWidget {
+  const MyApp({Key? key}) : super(key: key);
+
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _isDarkMode = false;
+
+  void toggleTheme() {
+    setState(() {
+      _isDarkMode = !_isDarkMode;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
-      child: Consumer<ThemeProvider>(
-        builder: (context, themeProvider, child) {
-          return MaterialApp(
-            title: 'Smart Prescription Scanner',
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData.light(),
-            darkTheme: ThemeData.dark(),
-            themeMode: themeProvider.themeMode,
-            localizationsDelegates: const [
-              DefaultMaterialLocalizations.delegate,
-              DefaultWidgetsLocalizations.delegate,
-              DefaultCupertinoLocalizations.delegate,
+    if (Platform.isIOS) {
+      return MaterialApp(
+        title: 'Smart Prescription Scanner',
+        theme: _isDarkMode ? ThemeData.dark() : ThemeData.light(),
+        darkTheme: ThemeData.dark(),
+        themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+        // Add Material localizations
+        localizationsDelegates: const [
+          DefaultMaterialLocalizations.delegate,
+          DefaultCupertinoLocalizations.delegate,
+          DefaultWidgetsLocalizations.delegate,
+        ],
+        home: CupertinoTabScaffold(
+          tabBar: CupertinoTabBar(
+            items: const [
+              BottomNavigationBarItem(
+                icon: Icon(CupertinoIcons.home),
+                label: 'Home',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(CupertinoIcons.camera),
+                label: 'Scan',
+              ),
+              BottomNavigationBarItem(
+                icon: Icon(CupertinoIcons.settings),
+                label: 'Settings',
+              ),
             ],
-            supportedLocales: const [
-              Locale('en'), // English
-            ],
-            home: Platform.isIOS ? const IOSHomeScreen() : const HomeScreen(),
-          );
+          ),
+          tabBuilder: (context, index) {
+            switch (index) {
+              case 0:
+                return CupertinoTabView(
+                  builder: (context) => const HomeScreen(),
+                  routes: {
+                    '/prescription_detail':
+                        (context) => PrescriptionDetailScreen(
+                          medicationName:
+                              ModalRoute.of(context)!.settings.arguments
+                                  as String,
+                        ),
+                  },
+                );
+              case 1:
+                return CupertinoTabView(
+                  builder: (context) => const ScanPrescriptionScreen(),
+                  routes: {
+                    '/scan_results': (context) => const ScanResultsScreen(),
+                    '/prescription_detail':
+                        (context) => PrescriptionDetailScreen(
+                          medicationName:
+                              ModalRoute.of(context)!.settings.arguments
+                                  as String,
+                        ),
+                  },
+                );
+              case 2:
+                return CupertinoTabView(
+                  builder:
+                      (context) => SettingsScreen(toggleTheme: toggleTheme),
+                );
+              default:
+                return CupertinoTabView(
+                  builder: (context) => const HomeScreen(),
+                );
+            }
+          },
+        ),
+      );
+    } else {
+      return MaterialApp(
+        title: 'Smart Prescription Scanner',
+        theme: _isDarkMode ? ThemeData.dark() : AppTheme.lightTheme,
+        darkTheme: AppTheme.darkTheme,
+        themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+        home: const HomeScreen(),
+        routes: {
+          '/scan': (context) => const ScanPrescriptionScreen(),
+          '/scan_results': (context) => const ScanResultsScreen(),
+          '/prescription_detail':
+              (context) => PrescriptionDetailScreen(
+                medicationName:
+                    ModalRoute.of(context)!.settings.arguments as String,
+              ),
+          '/settings': (context) => SettingsScreen(toggleTheme: toggleTheme),
         },
-      ),
-    );
+      );
+    }
   }
 }
 
-mixin GlobalCupertinoLocalizations {}
+class MainTabController extends StatefulWidget {
+  final Function toggleTheme; // Changed from Function(bool)
 
-// iOS-specific home screen with tab bar
-class IOSHomeScreen extends StatefulWidget {
-  const IOSHomeScreen({Key? key}) : super(key: key);
+  const MainTabController({Key? key, required this.toggleTheme})
+    : super(key: key);
 
   @override
-  State<IOSHomeScreen> createState() => _IOSHomeScreenState();
+  State<MainTabController> createState() => _MainTabControllerState();
 }
 
-class _IOSHomeScreenState extends State<IOSHomeScreen> {
-  int _selectedIndex = 0;
+class _MainTabControllerState extends State<MainTabController> {
+  int _currentIndex = 0;
 
-  static const List<Widget> _screens = [
-    CameraScreen(),
-    HistoryScreen(),
-    RemindersScreen(),
-    SettingsScreen(),
+  final List<Widget> _tabs = [
+    const HomeScreen(),
+    const ScanPrescriptionScreen(),
+    const SettingsScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return CupertinoTabScaffold(
       tabBar: CupertinoTabBar(
-        items: const <BottomNavigationBarItem>[
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(CupertinoIcons.home),
+            label: 'Home',
+          ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.camera),
             label: 'Scan',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.clock),
-            label: 'History',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(CupertinoIcons.bell),
-            label: 'Reminders',
           ),
           BottomNavigationBarItem(
             icon: Icon(CupertinoIcons.settings),
             label: 'Settings',
           ),
         ],
-        currentIndex: _selectedIndex,
+        currentIndex: _currentIndex,
         onTap: (index) {
           setState(() {
-            _selectedIndex = index;
+            _currentIndex = index;
           });
         },
       ),
       tabBuilder: (context, index) {
         return CupertinoTabView(
           builder: (context) {
-            return _screens[index];
+            return _tabs[index];
           },
         );
       },
@@ -115,50 +176,54 @@ class _IOSHomeScreenState extends State<IOSHomeScreen> {
   }
 }
 
-// Android home screen with bottom navigation
-class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+class MainNavigationController extends StatefulWidget {
+  final Function(bool) toggleTheme;
+
+  const MainNavigationController({Key? key, required this.toggleTheme})
+    : super(key: key);
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<MainNavigationController> createState() =>
+      _MainNavigationControllerState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
-  int _selectedIndex = 0;
+class _MainNavigationControllerState extends State<MainNavigationController> {
+  int _currentIndex = 0;
 
-  static const List<Widget> _screens = [
-    CameraScreen(),
-    HistoryScreen(),
-    RemindersScreen(),
-    SettingsScreen(),
+  final List<Widget> _screens = [
+    const HomeScreen(),
+    const ScanPrescriptionScreen(),
+    const SettingsScreen(),
   ];
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.camera_alt), label: 'Scan'),
-          BottomNavigationBarItem(icon: Icon(Icons.history), label: 'History'),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.notifications),
-            label: 'Reminders',
+      body: IndexedStack(index: _currentIndex, children: _screens),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home),
+            label: 'Home',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings),
+          NavigationDestination(
+            icon: Icon(Icons.camera_alt_outlined),
+            selectedIcon: Icon(Icons.camera_alt),
+            label: 'Scan',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.settings_outlined),
+            selectedIcon: Icon(Icons.settings),
             label: 'Settings',
           ),
         ],
-        currentIndex: _selectedIndex,
-        onTap: _onItemTapped,
       ),
     );
   }

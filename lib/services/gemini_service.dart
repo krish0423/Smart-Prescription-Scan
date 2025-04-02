@@ -46,11 +46,9 @@ class GeminiService {
 
       if (response?.content != null) {
         try {
-          debugPrint(
-            response!.output!.replaceAll('```json', '').replaceFirst('```', ''),
-          );
+          debugPrint(response!.output!.replaceAll('', '').replaceFirst('', ''));
           return jsonDecode(
-            response!.output!.replaceAll('```json', '').replaceFirst('```', ''),
+            response!.output!.replaceAll('', '').replaceFirst('', ''),
           );
         } catch (e) {
           print('Error parsing JSON response: $e');
