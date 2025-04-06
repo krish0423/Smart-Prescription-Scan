@@ -71,6 +71,9 @@ class _MyAppState extends State<MyApp> {
                               ModalRoute.of(context)!.settings.arguments
                                   as String,
                         ),
+                    '/scan':
+                        (context) =>
+                            const ScanPrescriptionScreen(), // Add this route
                   },
                 );
               case 1:
@@ -134,14 +137,14 @@ class MainTabController extends StatefulWidget {
 class _MainTabControllerState extends State<MainTabController> {
   int _currentIndex = 0;
 
-  final List<Widget> _tabs = [
-    const HomeScreen(),
-    const ScanPrescriptionScreen(),
-    const SettingsScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final List<Widget> _tabs = [
+      const HomeScreen(),
+      const ScanPrescriptionScreen(),
+      SettingsScreen(toggleTheme: widget.toggleTheme),
+    ];
+
     return CupertinoTabScaffold(
       tabBar: CupertinoTabBar(
         items: const [
@@ -190,10 +193,10 @@ class MainNavigationController extends StatefulWidget {
 class _MainNavigationControllerState extends State<MainNavigationController> {
   int _currentIndex = 0;
 
-  final List<Widget> _screens = [
+  late final List<Widget> _screens = [
     const HomeScreen(),
     const ScanPrescriptionScreen(),
-    const SettingsScreen(),
+    SettingsScreen(toggleTheme: widget.toggleTheme),
   ];
 
   @override

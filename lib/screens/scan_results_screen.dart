@@ -1,332 +1,258 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/cupertino.dart';
-import 'dart:io' show Platform, File;
-import 'package:google_ml_kit/google_ml_kit.dart';
 
 class ScanResultsScreen extends StatefulWidget {
-  final File? scannedImage;
-
-  const ScanResultsScreen({Key? key, this.scannedImage}) : super(key: key);
+  const ScanResultsScreen({Key? key}) : super(key: key);
 
   @override
   State<ScanResultsScreen> createState() => _ScanResultsScreenState();
 }
 
 class _ScanResultsScreenState extends State<ScanResultsScreen> {
-  bool _isLoading = true;
-  String _extractedText = '';
-  Map<String, String> _extractedData = {};
+  late List<Map<String, dynamic>> _detectedMedications;
+  final List<Map<String, dynamic>> _selectedMedications = [];
 
   @override
-  void initState() {
-    super.initState();
-    if (widget.scannedImage != null) {
-      _processImage(widget.scannedImage!);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Get the detected medications from the route arguments
+    final args = ModalRoute.of(context)?.settings.arguments;
+    if (args != null && args is List<Map<String, dynamic>>) {
+      _detectedMedications = args;
     } else {
-      setState(() {
-        _isLoading = false;
-      });
+      // Fallback if no medications were passed
+      _detectedMedications = [];
     }
   }
 
-  Future<void> _processImage(File image) async {
-    try {
-      // Create an InputImage from the file
-      final inputImage = InputImage.fromFile(image);
+  void _toggleMedicationSelection(Map<String, dynamic> medication) {
+    setState(() {
+      if (_selectedMedications.contains(medication)) {
+        _selectedMedications.remove(medication);
+      } else {
+        _selectedMedications.add(medication);
+      }
+    });
+  }
 
-      // Get an instance of the text recognizer
-      final textRecognizer = GoogleMlKit.vision.textRecognizer();
-
-      // Process the image and extract text
-      final RecognizedText recognizedText = await textRecognizer.processImage(
-        inputImage,
+  void _addSelectedMedications() {
+    if (_selectedMedications.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select at least one medication'),
+          duration: Duration(seconds: 2),
+        ),
       );
-
-      // Get the full text
-      String fullText = recognizedText.text;
-
-      // Parse the extracted text to identify prescription elements
-      Map<String, String> parsedData = _parsePrescriptionText(fullText);
-
-      // Release resources
-      await textRecognizer.close();
-
-      if (mounted) {
-        setState(() {
-          _extractedText = fullText;
-          _extractedData = parsedData;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _extractedText = 'Error extracting text: $e';
-          _isLoading = false;
-        });
-      }
+      return;
     }
-  }
 
-  Map<String, String> _parsePrescriptionText(String text) {
-    // This is a simple parser that looks for common patterns in prescriptions
-    // In a real app, you would use more sophisticated NLP techniques
-    Map<String, String> result = {};
-
-    // Look for patient name
-    RegExp patientRegex = RegExp(
-      r'(?:Patient|Name)[:\s]+([A-Za-z\s]+)',
-      caseSensitive: false,
+    // In a real app, you would save these medications to a database
+    // For now, we'll just show a success message and navigate back
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+            '${_selectedMedications.length} medications added to your list'),
+        duration: const Duration(seconds: 2),
+      ),
     );
-    Match? patientMatch = patientRegex.firstMatch(text);
-    if (patientMatch != null && patientMatch.groupCount >= 1) {
-      result['Patient Name'] = patientMatch.group(1)!.trim();
-    }
 
-    // Look for medication
-    RegExp medicationRegex = RegExp(
-      r'(?:Rx|Medication|Drug)[:\s]+([A-Za-z0-9\s]+)',
-      caseSensitive: false,
-    );
-    Match? medicationMatch = medicationRegex.firstMatch(text);
-    if (medicationMatch != null && medicationMatch.groupCount >= 1) {
-      result['Medication'] = medicationMatch.group(1)!.trim();
-    }
-
-    // Look for dosage
-    RegExp dosageRegex = RegExp(
-      r'(?:Dosage|Dose)[:\s]+([A-Za-z0-9\s]+(?:mg|g|ml|mcg))',
-      caseSensitive: false,
-    );
-    Match? dosageMatch = dosageRegex.firstMatch(text);
-    if (dosageMatch != null && dosageMatch.groupCount >= 1) {
-      result['Dosage'] = dosageMatch.group(1)!.trim();
-    }
-
-    // Look for frequency
-    RegExp frequencyRegex = RegExp(
-      r'(?:Frequency|Take)[:\s]+([A-Za-z0-9\s]+(?:daily|weekly|monthly|hours|days))',
-      caseSensitive: false,
-    );
-    Match? frequencyMatch = frequencyRegex.firstMatch(text);
-    if (frequencyMatch != null && frequencyMatch.groupCount >= 1) {
-      result['Frequency'] = frequencyMatch.group(1)!.trim();
-    }
-
-    // Look for doctor
-    RegExp doctorRegex = RegExp(
-      r'(?:Doctor|Dr|Physician)[:\s\.]+([A-Za-z\s\.]+)',
-      caseSensitive: false,
-    );
-    Match? doctorMatch = doctorRegex.firstMatch(text);
-    if (doctorMatch != null && doctorMatch.groupCount >= 1) {
-      result['Doctor'] = doctorMatch.group(1)!.trim();
-    }
-
-    // Look for date
-    RegExp dateRegex = RegExp(
-      r'(?:Date)[:\s]+(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})',
-      caseSensitive: false,
-    );
-    Match? dateMatch = dateRegex.firstMatch(text);
-    if (dateMatch != null && dateMatch.groupCount >= 1) {
-      result['Date'] = dateMatch.group(1)!.trim();
-    }
-
-    return result;
+    // Navigate back to the home screen
+    Navigator.popUntil(context, ModalRoute.withName('/'));
   }
 
   @override
   Widget build(BuildContext context) {
-    if (Platform.isIOS) {
-      return CupertinoPageScaffold(
-        navigationBar: const CupertinoNavigationBar(
-          middle: Text('Scan Results'),
-        ),
-        child: SafeArea(
-          child: _isLoading ? _buildLoadingView() : _buildResultsView(context),
-        ),
-      );
-    } else {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Scan Results')),
-        body: _isLoading ? _buildLoadingView() : _buildResultsView(context),
-      );
-    }
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Scan Results'),
+        centerTitle: true,
+        elevation: 0,
+      ),
+      body: _detectedMedications.isEmpty
+          ? _buildEmptyState()
+          : _buildMedicationList(),
+      bottomNavigationBar: _detectedMedications.isEmpty
+          ? null
+          : BottomAppBar(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: ElevatedButton(
+                  onPressed: _selectedMedications.isEmpty
+                      ? null
+                      : _addSelectedMedications,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                  child: Text(
+                    'Add ${_selectedMedications.isEmpty ? 'Medications' : '${_selectedMedications.length} Medications'}',
+                  ),
+                ),
+              ),
+            ),
+    );
   }
 
-  Widget _buildLoadingView() {
+  Widget _buildEmptyState() {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          if (Platform.isIOS)
-            const CupertinoActivityIndicator(radius: 20)
-          else
-            const CircularProgressIndicator(),
-          const SizedBox(height: 20),
+          Icon(
+            Icons.search_off,
+            size: 80,
+            color: Theme.of(context).colorScheme.error.withOpacity(0.5),
+          ),
+          const SizedBox(height: 16),
           Text(
-            'Analyzing prescription...',
-            style: TextStyle(
-              fontSize: 16,
-              color:
-                  Platform.isIOS
-                      ? CupertinoColors.systemGrey
-                      : Colors.grey[600],
-            ),
+            'No Medications Found',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'We couldn\'t detect any medications in the prescription.',
+            style: Theme.of(context).textTheme.bodyMedium,
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 24),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            icon: const Icon(Icons.camera_alt),
+            label: const Text('Try Again'),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildResultsView(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (widget.scannedImage != null) ...[
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.file(
-                widget.scannedImage!,
-                height: 200,
-                width: double.infinity,
-                fit: BoxFit.cover,
+  Widget _buildMedicationList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Detected Medications',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-            ),
-            const SizedBox(height: 20),
-          ],
-
-          Text(
-            'Extracted Information',
-            style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.bold,
-              color: Platform.isIOS ? CupertinoColors.black : Colors.black,
-            ),
+              const SizedBox(height: 8),
+              Text(
+                'We found ${_detectedMedications.length} medications in your prescription. Select the ones you want to add to your list.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
+        ),
+        Expanded(
+          child: ListView.builder(
+            padding: const EdgeInsets.all(16),
+            itemCount: _detectedMedications.length,
+            itemBuilder: (context, index) {
+              final medication = _detectedMedications[index];
+              final isSelected = _selectedMedications.contains(medication);
 
-          // Display extracted data if available
-          if (_extractedData.isNotEmpty) ...[
-            ..._extractedData.entries.map(
-              (entry) => _buildDataRow(entry.key, entry.value),
-            ),
-          ] else ...[
-            // Display raw extracted text if structured data couldn't be parsed
-            const Text(
-              'Raw Extracted Text:',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              _extractedText.isEmpty
-                  ? 'No text detected in the image.'
-                  : _extractedText,
-              style: const TextStyle(fontSize: 16),
-            ),
-          ],
-
-          const SizedBox(height: 30),
-
-          // Action buttons
-          Center(
-            child:
-                Platform.isIOS
-                    ? Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              return Card(
+                margin: const EdgeInsets.only(bottom: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: isSelected
+                      ? BorderSide(
+                          color: Theme.of(context).colorScheme.primary,
+                          width: 2,
+                        )
+                      : BorderSide.none,
+                ),
+                child: InkWell(
+                  onTap: () => _toggleMedicationSelection(medication),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
                       children: [
-                        CupertinoButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Rescan'),
-                        ),
-                        CupertinoButton.filled(
-                          onPressed:
-                              _extractedData.containsKey('Medication')
-                                  ? () {
-                                    // Save to prescription history
-                                    Navigator.pushNamed(
-                                      context,
-                                      '/prescription_detail',
-                                      arguments:
-                                          _extractedData['Medication'] ??
-                                          'Medication',
-                                    );
-                                  }
-                                  : null,
-                          child: const Text('Save Prescription'),
-                        ),
-                      ],
-                    )
-                    : Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        TextButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          child: const Text('Rescan'),
+                        Container(
+                          width: 24,
+                          height: 24,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : Theme.of(context).colorScheme.surface,
+                            border: Border.all(
+                              color: isSelected
+                                  ? Theme.of(context).colorScheme.primary
+                                  : Theme.of(context).colorScheme.outline,
+                              width: 2,
+                            ),
+                          ),
+                          child: isSelected
+                              ? Icon(
+                                  Icons.check,
+                                  size: 16,
+                                  color:
+                                      Theme.of(context).colorScheme.onPrimary,
+                                )
+                              : null,
                         ),
                         const SizedBox(width: 16),
-                        ElevatedButton(
-                          onPressed:
-                              _extractedData.containsKey('Medication')
-                                  ? () {
-                                    // Save to prescription history
-                                    Navigator.pushNamed(
-                                      context,
-                                      '/prescription_detail',
-                                      arguments:
-                                          _extractedData['Medication'] ??
-                                          'Medication',
-                                    );
-                                  }
-                                  : null,
-                          child: const Text('Save Prescription'),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                medication['name'],
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                '${medication['dosage']} · ${medication['frequency']}',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Duration: ${medication['duration']}',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .primary
+                                .withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            '${(medication['confidence'] * 100).toInt()}% match',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
                         ),
                       ],
                     ),
+                  ),
+                ),
+              );
+            },
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDataRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 120,
-            child: Text(
-              '$label:',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 16,
-                color:
-                    Platform.isIOS
-                        ? CupertinoColors.systemGrey
-                        : Colors.grey[700],
-              ),
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: TextStyle(
-                fontSize: 16,
-                color: Platform.isIOS ? CupertinoColors.black : Colors.black,
-              ),
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

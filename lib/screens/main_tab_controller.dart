@@ -53,11 +53,19 @@ class _MainTabControllerState extends State<MainTabController> {
           case 1:
             return CupertinoTabView(
               builder: (context) => const ScanPrescriptionScreen(),
-              routes: {'/scan_results': (context) => const ScanResultsScreen()},
+              routes: {
+                '/scan_results': (context) => const ScanResultsScreen(),
+                '/prescription_detail':
+                    (context) => PrescriptionDetailScreen(
+                      medicationName:
+                          ModalRoute.of(context)!.settings.arguments as String,
+                    ),
+              },
             );
           case 2:
             return CupertinoTabView(
-              builder: (context) => const SettingsScreen(),
+              builder:
+                  (context) => SettingsScreen(toggleTheme: widget.toggleTheme),
             );
           default:
             return CupertinoTabView(builder: (context) => const HomeScreen());

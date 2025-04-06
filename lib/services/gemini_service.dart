@@ -13,55 +13,70 @@ class GeminiService {
     }
     final apiKey = dotenv.env['GEMINI_API_KEY'];
     _gemini = Gemini.init(
-      apiKey: apiKey!,
-    ); // Updated initialization for latest version
+        apiKey: apiKey!); // Updated initialization for latest version
   }
 
   Future<Map<String, dynamic>> analyzePrescription(File imageFile) async {
     try {
-      final prompt = '''
-        Analyze the given prescription image and extract the following information in JSON format:
-        {
-          "doctorName": "(Doctor's name if available, otherwise null)",
-          "patientName": "(Patient's name if available, otherwise null)",
-          "date": "(Prescription date if available, otherwise null)",
-          "diagnosis": "(Diagnosis details if mentioned, otherwise null)",
-          "medications": [
-            {
-              "name": "(Medicine name if available, otherwise null)",
-              "dosage": "(Dosage details if available, otherwise null)",
-              "frequency": "(How often the medicine should be taken, otherwise null)",
-              "duration": "(Duration of medication if available, otherwise null)"
-            }
-          ],
-          "specialInstructions": "(Special notes or instructions if mentioned, otherwise null)"
-        }
-        Ensure the output is a valid JSON object and does not contain any additional text or explanations.
-      ''';
+      final prompt =
+          '''Analyze the given prescription image and extract the following information in JSON format:
+{
+  "doctorName": "(Doctor's name if available, otherwise null)",
+  "patientName": "(Patient's name if available, otherwise null)",
+  "date": "(Prescription date if available, otherwise null)",
+  "diagnosis": "(Diagnosis details if mentioned, otherwise null)",
+  "medications": [
+    {
+      "name": "(Medicine name if available, otherwise null)",
+      "dosage": "(Dosage details if available, otherwise null)",
+      "frequency": "(How often the medicine should be taken, otherwise null)",
+      "duration": "(Duration of medication if available, otherwise null)"
+    }
+  ],
+  "specialInstructions": "(Special notes or instructions if mentioned, otherwise null)"
+}
+Ensure the output is a valid JSON object and does not contain any additional text or explanations.''';
 
-      final response = await Gemini.instance.textAndImage(
+      final response = await _gemini.textAndImage(
         text: prompt,
         images: [imageFile.readAsBytesSync()],
       );
 
-      if (response?.content != null) {
+      if (response?.output != null) {
         try {
-          debugPrint(response!.output!.replaceAll('', '').replaceFirst('', ''));
-          return jsonDecode(
-            response!.output!.replaceAll('', '').replaceFirst('', ''),
-          );
+          // Clean the response to extract just the JSON part
+          String cleanedResponse = response!.output!;
+
+          // Remove markdown code block indicators if present
+          if (cleanedResponse.contains("")) {
+            cleanedResponse =
+                cleanedResponse.replaceAll("json", "").replaceAll("", "");
+          } else if (cleanedResponse.contains("")) {
+            cleanedResponse = cleanedResponse.replaceAll("```", "");
+          }
+
+          // Trim whitespace
+          cleanedResponse = cleanedResponse.trim();
+
+          debugPrint("Cleaned response: $cleanedResponse");
+
+          // Parse the JSON
+          return jsonDecode(cleanedResponse);
         } catch (e) {
-          print('Error parsing JSON response: $e');
-          return {'error': 'Failed to parse prescription data'};
+          debugPrint('Error parsing JSON response: $e');
+          return {
+            'error': 'Failed to parse prescription data',
+            'rawResponse': response?.output,
+          };
         }
       } else {
         return {
           'error': 'No response from Gemini API',
-          'rawResponse': response.toString(),
+          'rawResponse': response?.toString() ?? 'Null response',
         };
       }
     } catch (e) {
-      print('Error analyzing prescription: $e');
+      debugPrint('Error analyzing prescription: $e');
       return {'error': 'Error analyzing prescription: ${e.toString()}'};
     }
   }
